@@ -1,0 +1,247 @@
+package io.sarl.test1
+
+import io.sarl.api.core.Destroy
+import io.sarl.api.core.Initialize
+import io.sarl.api.core.Lifecycle
+import io.sarl.api.core.Logging
+import io.sarl.api.core.Schedules
+import io.sarl.api.core.DefaultContextInteractions
+import java.util.concurrent.atomic.AtomicInteger
+import io.sarl.api.core.AgentSpawned
+import io.sarl.api.core.Behaviors
+import io.sarl.api.core.InnerContextAccess
+import io.sarl.lang.core.Address
+import java.util.Random
+import java.util.UUID
+import io.sarl.api.core.OpenEventSpace
+import io.sarl.api.core.OpenEventSpaceSpecification
+import io.sarl.api.core.ExternalContextAccess
+
+agent DirectionAgent {
+	uses Lifecycle, Schedules, Logging, DefaultContextInteractions, Behaviors, InnerContextAccess, ExternalContextAccess 
+
+	var count = new AtomicInteger
+	
+	var nEmployeesLacking = 0
+	var nEmployees = 10
+	var nDepartments = 3
+	var isSimulationStarted = true
+	var sem = new Object
+	var first = true
+	var simulationDuration : long = 20000
+
+	var superiorSpace : OpenEventSpace
+    var humanRSpace : OpenEventSpace
+    var personnelDSpace : OpenEventSpace
+	var supplierSpace : OpenEventSpace
+
+	var superiorSpaceId : UUID
+	var humanRSpaceId : UUID
+	var personnelDSpaceId : UUID
+	var supplierSpaceId : UUID
+	
+	var myDepartmentId : UUID = null
+	var currentPlan : PlanStats = null
+
+	on Initialize {		
+		loggingName = "Direction"
+		info("Start Company")
+
+		wake(new createSuperiors)
+		wake(new createHumanResources)
+		wake(new createPersonnelDepartment)
+		wake(new createSupplier)
+		wake(new createEmployees)
+		
+		in(simulationDuration) [
+			var evt = new Die()
+			evt.source = superiorSpace.getAddress(getID())
+			superiorSpace.emit(evt)
+			evt.source = humanRSpace.getAddress(getID())
+			humanRSpace.emit(evt)
+			evt.source = personnelDSpace.getAddress(getID())
+			personnelDSpace.emit(evt)
+			evt.source = supplierSpace.getAddress(getID())
+			supplierSpace.emit(evt)
+		]
+		
+
+		in(simulationDuration) [
+			val waitTask = task("wait-task")
+			waitTask.every(1000) [
+
+				synchronized(this) {
+					if (!isSimulationStarted) {
+						wake(new Die)
+						info("Launched Die event")
+						if (!hasMemberAgent) {
+							waitTask.cancel
+							killMe
+						}
+					}
+				}
+				isSimulationStarted = false
+			]
+		]
+	}
+	
+	on createSuperiors {
+		synchronized(sem){
+			superiorSpaceId = UUID::randomUUID
+			spawn(DepartmentAgent, superiorSpaceId, "Superior")
+			superiorSpace = defaultContext.getOrCreateSpaceWithID(typeof(OpenEventSpaceSpecification), superiorSpaceId)
+		}
+	}
+
+	on createHumanResources {
+		synchronized(sem){
+			humanRSpaceId = UUID::randomUUID
+			spawn(DepartmentAgent, humanRSpaceId, "Human Resources")
+			humanRSpace = defaultContext.getOrCreateSpaceWithID(typeof(OpenEventSpaceSpecification), humanRSpaceId)
+		}
+	}
+
+	on createPersonnelDepartment {
+		synchronized(sem){
+			personnelDSpaceId = UUID::randomUUID
+			spawn(DepartmentAgent, personnelDSpaceId, "Personnel Department")
+			personnelDSpace = defaultContext.getOrCreateSpaceWithID(typeof(OpenEventSpaceSpecification), personnelDSpaceId)
+		}
+	}
+
+	on createSupplier {
+		synchronized (sem) {
+			supplierSpaceId = UUID::randomUUID
+			spawn(SupplierAgent, supplierSpaceId, "Supplier")
+			supplierSpace = defaultContext.getOrCreateSpaceWithID(typeof(OpenEventSpaceSpecification), supplierSpaceId)
+		}
+	}
+
+    on createEmployees {
+		for (i : 1 .. nEmployees) {
+			spawnInContext(typeof(EmployeeAgent), innerContext, i)
+		}
+    }
+
+	on AgentSpawned [it.agentID != ID] {
+		var n = this.count.incrementAndGet
+		if (n === nEmployees + nDepartments + 1) {
+			info("AgentSpawned Event: everybody spawned")
+			
+			var evt = new NofEmployees(nEmployees)
+			evt.source = humanRSpace.getAddress(getID())
+			humanRSpace.emit(evt)
+			
+			in(100)[
+				myDepartmentId = humanRSpaceId
+				wake(new JoinDepartment(humanRSpace, false))
+				wake(new SelfJoinDepartment(humanRSpace))
+			]
+		}
+	}
+	
+	on SupplierReady {
+		/*info ("Supplier ready for employees")*/
+		wake(new JoinDepartment(supplierSpace, true))
+	}
+	
+	/*on JoinDepartment {
+		synchronized (sem){
+			(occurrence.value).registerStrongParticipant(asEventListener())
+			//join(myDepartmentId, UUID::randomUUID)
+			info("joined")
+		}
+	}*/
+
+	on SelfJoinDepartment {
+		synchronized (sem){
+			(occurrence.value).registerStrongParticipant(asEventListener())
+			/*info("joined")*/
+			
+			if (occurrence.value == supplierSpace && currentPlan!=null) {
+					var evt = new NewStats("You are like this", currentPlan)
+					evt.source = supplierSpace.getAddress(getID())
+					supplierSpace.emit(evt)
+			} else if (occurrence.value == personnelDSpace && nEmployeesLacking > 0) {
+				in (1000)[
+					var evt = new NofEmployees(nEmployeesLacking)
+					evt.source = personnelDSpace.getAddress(getID())
+					personnelDSpace.emit(evt)	
+				]
+			} else if (occurrence.value == superiorSpace) {
+				var evt = new NofEmployees(nEmployeesLacking)
+				evt.source = superiorSpace.getAddress(getID())
+				superiorSpace.emit(evt)
+				in(100) [
+					wake(new JoinDepartment(superiorSpace, true))
+				]
+			} else if (occurrence.value == humanRSpace && first != true) {
+				nEmployeesLacking = 0;
+				wake(new makeClean())
+				info("Make clean")
+				
+				var evt = new NofEmployees(nEmployees)
+				evt.source = humanRSpace.getAddress(getID())
+				humanRSpace.emit(evt)
+				wake(new JoinDepartment(humanRSpace, false))
+			} else if (first != true) {
+				info("no more actions")
+			}
+		}
+	}
+
+	on LeaveDepartment {
+		first = false
+		synchronized (sem){
+			if (occurrence.value != null) {
+				var comspace = occurrence.value
+				comspace.unregister(asEventListener())
+			}
+			switch (myDepartmentId) {
+				case superiorSpaceId:
+					myDepartmentId = humanRSpaceId
+				case humanRSpaceId:
+					myDepartmentId = personnelDSpaceId
+				case personnelDSpaceId:
+					myDepartmentId = supplierSpaceId
+				case supplierSpaceId:
+					myDepartmentId = superiorSpaceId
+				default:
+					myDepartmentId = null
+			}
+			switch (myDepartmentId) {
+				case superiorSpaceId:
+					wake(new SelfJoinDepartment(superiorSpace))
+				case humanRSpaceId:
+					wake(new SelfJoinDepartment(humanRSpace))
+				case personnelDSpaceId:
+					wake(new SelfJoinDepartment(personnelDSpace))
+				case supplierSpaceId:
+					wake(new SelfJoinDepartment(supplierSpace))
+				default:
+					myDepartmentId = null
+			}
+			/*info("left")*/
+		}
+	}
+	
+	on NofEmployees [(!isFromMe)] {
+		info("NofEmployees received: " + occurrence.value)
+		nEmployeesLacking = occurrence.value
+		
+	}
+	
+	on Plan{
+		info("Plan received: "+occurrence.value)
+		currentPlan = occurrence.plan
+		/*info("number: "+currentPlan.NDoc)*/
+		wake(new LeaveDepartment(personnelDSpace, false))
+	}
+
+	on Destroy {
+		info("The End")
+	}	
+}
+
+
+

@@ -1,0 +1,197 @@
+package io.sarl.test1
+
+import io.sarl.api.core.Logging
+import io.sarl.api.core.OpenEventSpace
+import io.sarl.api.core.ExternalContextAccess
+import io.sarl.api.core.Schedules
+import java.util.concurrent.atomic.AtomicInteger
+import io.sarl.api.core.DefaultContextInteractions
+import java.util.ArrayList
+import java.util.Random
+
+/*capacity Cap {
+	def action
+}
+
+skill Ski implements Cap {
+	uses Logging
+
+	def action {
+		info("Action")
+	}
+}
+
+skill ExtendedSki extends Ski {
+	uses Logging
+
+	def action(text : String) {
+		info("Extended Action "+ text)
+	}
+}*/
+
+//---------------------------------------------
+
+capacity StandardCap {
+	def talk
+	def checkGuests(comspace : OpenEventSpace)
+	def varFound(value : int)
+}
+
+skill DefaultSkill implements StandardCap {
+	uses Logging
+
+	def talk {
+		info("Default is operative")
+	}
+
+	def checkGuests(comspace : OpenEventSpace) {
+		info("Someone joined!")
+	}
+	
+	def varFound(value : int) {
+	}
+	
+}
+
+skill SuperiorSkill implements StandardCap {
+	uses Logging, ExternalContextAccess, Schedules
+
+	var nEmployees = 0
+	var executed = false
+
+	def talk {
+		info("Superior is operative")
+	}
+
+    synchronized def checkGuests(comspace : OpenEventSpace) {
+		if (nEmployees != 0 && comspace.numberOfWeakParticipants == nEmployees && !executed) {
+			executed = true
+			var evt = new TestSkills(comspace)
+			evt.source = comspace.getAddress(getID())
+			comspace.emit(evt)
+			in(1000) [
+				if (comspace.numberOfWeakParticipants != 0) {
+					var problem = new NofEmployees(comspace.numberOfWeakParticipants)
+					problem.source = comspace.getAddress(getID())
+					comspace.emit(problem)
+					info("problem found")
+				}
+
+				var leave = new LeaveDepartment(comspace, true)
+				leave.source = comspace.getAddress(getID())
+				comspace.emit(leave)
+				executed = false
+			]
+		}
+	}
+
+	synchronized def varFound(value : int) {
+		nEmployees = value
+	}
+	
+}
+
+skill HumanRSkill implements StandardCap {
+	uses Logging, ExternalContextAccess, Schedules
+
+	var count = new AtomicInteger
+	var executed = false
+	var nEmployees = 0
+
+	def talk {
+		info("Human Resources is operative")
+	}
+
+	synchronized def checkGuests(comspace : OpenEventSpace) {
+		if (nEmployees != 0 && comspace.numberOfWeakParticipants == nEmployees && !executed) {
+			executed = true
+			var evt = new TestSkills(comspace)
+			evt.source = comspace.getAddress(getID())
+			comspace.emit(evt)
+			in(1000) [
+				if (comspace.numberOfWeakParticipants != 0) {
+					var problem = new NofEmployees(comspace.numberOfWeakParticipants)
+					problem.source = comspace.getAddress(getID())
+					comspace.emit(problem)
+					info("problem found")
+				}
+				
+				var leave = new LeaveDepartment(comspace, true)
+				leave.source = comspace.getAddress(getID())
+				comspace.emit(leave)
+				executed = false
+			]
+		}
+	}
+
+	synchronized def varFound(value : int) {
+		nEmployees = value
+	}
+	
+}
+
+skill PersonnelDSkill implements StandardCap {
+	uses Logging, ExternalContextAccess, Schedules
+
+	val random = new Random
+	var executed = false
+	var n = 0
+	var comspace : OpenEventSpace
+	
+	def talk {
+		info("Personnel Department is operative")
+	}
+
+	synchronized def checkGuests(comspace : OpenEventSpace) {
+		this.comspace = comspace
+	}
+
+	synchronized def varFound(value : int) {
+		info("Choosing a Plan")
+		if (!executed && comspace != null) {
+			executed = true
+			var list = new ArrayList
+			list.add(new Plan("Azienda 1", new PlanStats(value, 1000, 3)))
+			list.add(new Plan("Azienda 2", new PlanStats(value, 2000, 1)))
+			var evt = list.get(n%2)/*list.get((random.nextInt()) % 2)*/
+			n++
+			evt.source = comspace.getAddress(getID())
+			comspace.emit(evt)
+			in(1000) [
+				executed = false
+			]
+		} else {
+			info("comspace = null")
+		}
+	}
+	
+}
+
+
+//------------------------------------------------------------
+
+capacity Cap1 {
+	def action1
+}
+
+capacity Cap2 {
+	def action2
+}
+
+skill s1 implements Cap1 {
+	uses Logging
+	
+	def action1 {
+		/*info("action s1")*/
+	}
+}
+
+skill s2 implements Cap2 {
+	uses Logging
+	
+	def action2 {
+		/*info("action s2")*/
+	}
+}
+
+

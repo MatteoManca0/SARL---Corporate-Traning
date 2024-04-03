@@ -1,0 +1,122 @@
+package io.sarl.test1
+
+import io.sarl.api.core.OpenEventSpace
+
+event Hello
+
+event Response
+
+event SupplierReady
+
+event StartApplication
+
+event makeClean
+
+event Die
+
+event LearnSkills {
+	val pApprendimento : int
+
+	new(pApprendimento : int) {
+		this.pApprendimento = pApprendimento
+	}
+}
+
+event NofEmployees {
+	val value : int
+
+	new(value : int) {
+		this.value = value
+	}
+}
+
+event NewStats {
+	val value : String
+	val plan : PlanStats
+
+	new(value : String, plan : PlanStats) {
+		this.value = value
+		this.plan = plan
+	}
+}
+
+event Plan {
+	val value : String
+	val plan : PlanStats
+	
+	new(value : String, plan : PlanStats) {
+		this.value = value
+		this.plan = plan
+	}
+}
+
+class PlanStats{
+	val nDoc : Number
+	val speed : long
+	val probability : int
+	
+	new(nDoc : Number, speed : long, probability : int){
+		this.nDoc = nDoc
+		this.speed = speed
+		this.probability = probability
+	}
+	
+	def getNDoc : Number{
+		this.nDoc
+	}
+
+	def getSpeed : long {
+		this.speed
+	}
+
+	def getProbability : int {
+		this.probability
+	}
+}
+
+event TestSkills{
+	val value : OpenEventSpace
+
+	new(value : OpenEventSpace) {
+		this.value = value
+	}
+}
+
+event SelfJoinDepartment {
+	val value : OpenEventSpace
+
+	new(value : OpenEventSpace) {
+		this.value = value
+	}
+}
+
+event JoinDepartment {
+	val value : OpenEventSpace
+	val lackOfSkills : boolean
+
+	new(value : OpenEventSpace, lackOfSkills : boolean) {
+		this.value = value
+		this.lackOfSkills = lackOfSkills
+	}
+}
+
+event LeaveDepartment {
+	val value : OpenEventSpace
+	val lackOfSkills : boolean
+
+	new(value : OpenEventSpace, lackOfSkills : boolean) {
+		this.value = value
+		this.lackOfSkills = lackOfSkills
+	}
+}
+
+
+event createSuperiors
+
+event createEmployees
+
+event createHumanResources
+
+event createPersonnelDepartment
+
+event createSupplier

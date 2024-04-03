@@ -1,0 +1,109 @@
+package io.sarl.test1
+
+import io.sarl.api.core.Lifecycle
+import io.sarl.api.core.DefaultContextInteractions
+import io.sarl.api.core.Logging
+import java.util.Random
+import io.sarl.api.core.Initialize
+import io.sarl.test1.Hello
+import io.sarl.test1.Draw
+import io.sarl.test1.Move
+import io.sarl.test1.Die
+import io.sarl.test1.StartApplication
+import io.sarl.api.core.OpenEventSpace
+import io.sarl.api.core.Behaviors
+import java.util.UUID
+import io.sarl.api.core.ExternalContextAccess
+import java.util.ArrayList
+
+agent EmployeeAgent {
+
+	uses Lifecycle, DefaultContextInteractions, Logging, Behaviors, ExternalContextAccess
+
+	uses Cap1, Cap2
+
+	val random = new Random
+	var comspace : OpenEventSpace
+	var myLackOfSkills = false
+	val probability = 10
+
+	on Initialize {
+		loggingName = "Employee " + occurrence.parameters.get(0) as String
+		/*info("Working")*/
+		if (occurrence.parameters.get(0) == ((random.nextInt()) % probability) + 1) {
+			setSkillIfAbsent(new s2)
+		}
+		
+		setSkillIfAbsent(new s1)
+	}
+
+	on Hello [!isFromMe] {
+		info("Hello!")
+	}
+
+	on Die {
+		/*info("Asked to die")*/
+		killMe
+	}
+
+	on StartApplication {
+		info("StartApplication received")
+	}
+	
+	on TestSkills {
+		/*info("TestSkills received")*/
+		var complete = true
+		
+		//make tests
+		try {
+			action1
+			action2
+		} catch (e : Exception) {
+			/*info("Skill absent")*/
+			complete = false
+		}
+		
+		if(complete){
+			if (comspace != null) {
+				comspace = occurrence.value
+				comspace.unregister(asEventListener())
+				comspace = null
+			}
+		}
+	}
+	
+	on LearnSkills {
+		setSkillIfAbsent(new s1)
+		if (0 == ((random.nextInt()) % occurrence.pApprendimento)) {
+			setSkillIfAbsent(new s2)
+		}
+	}
+	
+	on JoinDepartment {
+		if (occurrence.lackOfSkills==false || myLackOfSkills){
+			comspace = occurrence.value
+			comspace.registerWeakParticipant(asEventListener())
+			/*info("joined")*/
+			//info(comspace.spaceID.ID)
+		}
+	}
+
+	on LeaveDepartment {
+		if(comspace != null){
+			if (occurrence.lackOfSkills){
+				myLackOfSkills = true
+			}
+			comspace = occurrence.value
+			comspace.unregister(asEventListener())
+			comspace = null
+			/*info("left")*/
+		} else {
+			/*info("cannot leave")*/
+		}
+	}
+	
+	on makeClean {
+		/*info("I'm clean")*/
+		myLackOfSkills = false
+	}
+}

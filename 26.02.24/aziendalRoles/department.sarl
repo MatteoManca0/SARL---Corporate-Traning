@@ -1,0 +1,70 @@
+package io.sarl.test1
+
+import io.sarl.api.core.Behaviors
+import io.sarl.api.core.DefaultContextInteractions
+import io.sarl.api.core.ExternalContextAccess
+import io.sarl.api.core.Initialize
+import io.sarl.api.core.Lifecycle
+import io.sarl.api.core.Logging
+import io.sarl.api.core.OpenEventSpace
+import io.sarl.api.core.OpenEventSpaceSpecification
+import io.sarl.api.core.ParticipantJoined
+import java.util.UUID
+import java.util.LinkedList
+import io.sarl.api.core.Schedules
+
+agent DepartmentAgent {
+
+	uses Lifecycle, DefaultContextInteractions, Logging, Behaviors, ExternalContextAccess, Schedules
+	
+	uses StandardCap
+
+	var comspace : OpenEventSpace
+	
+	//ctrl space ---> suggerimenti
+	//ctrl shif o ---> import
+
+	on Initialize {
+		loggingName = occurrence.parameters.get(1) as String
+		
+		switch (occurrence.parameters.get(1)){
+			case "Superior":
+				setSkillIfAbsent(new SuperiorSkill)
+			case "Human Resources":
+				setSkillIfAbsent(new HumanRSkill)
+			case "Personnel Department":
+				setSkillIfAbsent(new PersonnelDSkill)
+			default:
+				setSkillIfAbsent(new DefaultSkill)
+		}
+		
+		/*talk*/
+
+		comspace = defaultContext.getOrCreateSpaceWithID(typeof(OpenEventSpaceSpecification), 
+			occurrence.parameters.get(0) as UUID)
+
+		comspace.registerStrongParticipant(asEventListener())
+		
+		//info(comspace.spaceID.ID)
+	}
+
+	on Hello [!isFromMe] {
+		info("Hello!")
+	}
+
+	on Die {
+		/*info("Asked to die")*/
+		comspace.unregister(asEventListener())
+		killMe
+	}
+
+	on ParticipantJoined [(!isFromMe) && (occurrence.spaceID == comspace.spaceID)
+	/*isInSpace(occurrence, comspace.spaceID)*/] {
+		checkGuests(comspace)
+	}
+	
+	on NofEmployees [(!isFromMe)] {
+		/*info("Number of guests received")*/
+		varFound(occurrence.value)
+	}
+}
